@@ -27,91 +27,38 @@ fn main() {
         exit(1);
     }
 
-    // Deal with command line usage
-    if perform_command_line_ops(&bulbs) {
-        return;
-    }
-
-    print_pretty_table(&bulbs);
-    print_usage_instructions();
-
-    start_program_loop(&bulbs);
-}
-
-fn start_program_loop(bulbs: &[Bulb]) {
-    // Main program loop
-    let mut current_operation_id = 0;
-    loop {
-        print!("Command: ");
-        io::stdout().flush().unwrap();
-        let stdin = io::stdin();
-        let mut prompt = String::new();
-        stdin.lock().read_line(&mut prompt).expect("Couldn't process the command.");
-        if prompt.contains("quit") { break; }
-        if prompt.contains("print") {
-            print_bulb_details(&bulbs);
-            continue;
-        }
-        prompt = prompt.chars().filter(|&c| !"\n\r\t".contains(c)).collect();
-        let space_split = prompt.split(' ').collect::<Vec<&str>>();
-        if space_split.len() < 2 {
-            println!("Please input at least 2 arguments.");
-            continue;
-        }
-        let bulb_index = match space_split[0].parse::<usize>() {
-            Ok(r) => {
-                if r > bulbs.len() || r == 0 {
-                    println!("Invalid bulb id.");
-                    continue;
-                }
-                r - 1
-            },
-            Err(_) => {
-                println!("Invalid command.");
-                continue;
-            }
-        };
-        let mut params = String::new();
-        if space_split.len() > 2 {
-            params.reserve(space_split.len() * 2); // at least 2 characters per arg
-            for arg in space_split.iter().skip(2) {
-                params.push_str(arg);
-                params.push_str(" ");
-            }
-            let new_len = params.len() - 1;
-            params.truncate(new_len); // get rid of trailing whitespace
-            params = parse_params(&params);
-        }
-        operate_on_bulb(&current_operation_id, &bulbs[bulb_index], space_split[1], &params);
-        current_operation_id += 1;
-    }
-}
-
-fn perform_command_line_ops(bulbs: &[Bulb]) -> bool {
-    // Returns true if an operation was performed
+    // Prase arguments
     let args: Vec<String> = env::args().collect();
-    if args.len() <= 2 {
-        return false
+
+    if args.len() < 2 {
+        println!("At least one argument is needed");
+        exit(1);
     }
-    let bulb_name = &args[1];
-    let method_name = &args[2];
-    for bulb in bulbs {
-        if bulb.name != *bulb_name { continue; }
-        let mut params = String::new();
-        if args.len() > 3 {
-            params.reserve(args.len() * 2); // at least 2 characters per arg
-            for arg in args.iter().skip(3) {
-                params.push_str(arg);
-                params.push_str(" ");
-            }
-            let new_len = params.len() - 1;
-            params.truncate(new_len); // get rid of trailing whitespace
-            params = parse_params(&params);
+
+    let mut arg_start: usize = 2;
+    
+    let bulb_id: u32 = match args[1].parse::<u32>() {
+        Ok(id) => id,
+        Err(_) => {
+            arg_start = 3;
+            1
         }
-        operate_on_bulb(&0, &bulb, method_name, &params);
-        return true;
+    };
+
+    let bulb = &bulbs[bulb_id as usize];
+    let cmd = &args[arg_start];
+    let state = &args[arg_start + 1];
+
+    process_cmd(bulb_id, &bulb, cmd, state);
+}
+
+fn process_cmd(bulb_id: u32, bulb: &Bulb, cmd: &String, state: &String) {
+    match &cmd[..] {
+        "pow" => {
+            operate_on_bulb(&bulb_id, bulb, "set_power", &format!("\"{}\"", state)) 
+        }
+        _ => return
     }
-    return false
 }
 
 fn find_bulbs(socket: UdpSocket) -> Receiver<Bulb> {
@@ -134,60 +81,6 @@ fn find_bulbs(socket: UdpSocket) -> Receiver<Bulb> {
     // Give the other thread some time to find the bulbs
     thread::sleep(time::Duration::from_millis(1200));
     receiver
-}
-
-fn parse_params(params: &str) -> String {
-    // Parses params, allowing the user to input on instead of "on"
-    let mut parsed_params = String::new();
-    let params_split = params.split(' ');
-    for param in params_split {
-        // Check if param is an integer or not
-        match param.parse::<i32>() {
-            Ok(_) => parsed_params.push_str(param),
-            Err(_) => {
-                parsed_params.push_str("\"");
-                parsed_params.push_str(param);
-                parsed_params.push_str("\"");
-            }
-        };
-        parsed_params.push_str(", ");
-    }
-    let new_len = parsed_params.len() - 2; // get rid of the trailing ", "
-    parsed_params.truncate(new_len);
-    parsed_params
-}
-
-fn print_pretty_table(bulbs: &[Bulb]) {
-    let mut id = 1;
-    let mut table = Table::new();
-    table.add_row(row!["ID", "NAME", "IP", "MODEL"]);
-    for bulb in bulbs {
-        table.add_row(row![id.to_string(), bulb.name, bulb.ip, bulb.model]);
-        id += 1;
-    }
-    table.printstd();
-}
-
-fn print_bulb_details(bulbs: &[Bulb]) {
-    println!("Warning: Bulb details may be outdated."); // TODO: fix this
-    let mut table = Table::new();
-    // This also does not print support variable
-    table.add_row(row!["UNIQUE ID", "MODEL", "FW VER", "POWER", "BRIGHT", "COLOR MODE", "CT", "RGB", "HUE", "SAT", "NAME", "IP"]);
-    for b in bulbs {
-        table.add_row(row![b.id, b.model, b.fw_ver, b.power, b.bright, b.color_mode, b.ct, b.rgb, b.hue, b.sat, b.name, b.ip]);
-    }
-    table.printstd();
-}
-
-fn print_usage_instructions() {
-    println!(
-        "To operate on bulbs, try prompting without using double quotes:
-        bulb_id method param1 param2 param3 param4
-        For example, you can try:
-        1 set_power on smooth 500
-        You can quit by typing quit.
-        You can print bulb details by typing print.
-        For a list of all available methods, you can check out: http://www.yeelight.com/download/Yeelight_Inter-Operation_Spec.pdf");
 }
 
 fn send_search_broadcast(socket: &UdpSocket) {
