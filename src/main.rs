@@ -30,8 +30,8 @@ fn main() {
     // Prase arguments
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        println!("At least one argument is needed");
+    if args.len() < 3 {
+        println!("At least two arguments are required");
         exit(1);
     }
 
