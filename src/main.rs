@@ -55,10 +55,21 @@ fn main() {
 fn process_cmd(bulb_id: u32, bulb: &Bulb, cmd: &String, state: &String) {
     match &cmd[..] {
         "pow" => {
-            operate_on_bulb(&bulb_id, bulb, "set_power", &format!("\"{}\"", state)) 
+            operate_on_bulb(&bulb_id, bulb, "set_power", &format!("\"{}\"", state))
+        },
+        "preset" => {
+            set_to_preset_color(bulb_id, bulb, state);
         }
         _ => return
     }
+}
+
+fn set_to_preset_color(bulb_id: u32, bulb: &Bulb, preset_name: &String) {
+    let params: String = match &preset_name[..] {
+        "def" => String::from("3500, 1, 500"),
+        _ => { return; }
+    };
+    operate_on_bulb(&bulb_id, bulb, "set_ct_abx", &params)
 }
 
 fn find_bulbs(socket: UdpSocket) -> Receiver<Bulb> {
