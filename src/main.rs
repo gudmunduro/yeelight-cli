@@ -49,7 +49,7 @@ fn main() {
     let cmd = &args[arg_start];
     let state = &args[arg_start + 1];
 
-    process_cmd(bulb_id, &bulb, cmd, state);
+    process_cmd(bulb_id, bulb, cmd, state);
 }
 
 fn process_cmd(bulb_id: u32, bulb: &Bulb, cmd: &String, state: &String) {
