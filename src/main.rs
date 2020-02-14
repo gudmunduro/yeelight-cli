@@ -10,6 +10,7 @@ use std::{thread, time};
 use std::net::{TcpStream, UdpSocket};
 use std::sync::mpsc::{Sender, Receiver, channel};
 use bulb::Bulb;
+use bulb::RGB;
 use std::io::{self, Write, BufRead, Read};
 
 const MULTICAST_ADDR: &str = "239.255.255.250:1982";
@@ -47,19 +48,26 @@ fn main() {
 
     let bulb = &bulbs[bulb_id as usize];
     let cmd = &args[arg_start];
-    let state = &args[arg_start + 1];
+    let args = &args[arg_start + 1..];
 
-    process_cmd(bulb_id, bulb, cmd, state);
+    process_cmd(bulb_id, bulb, cmd, args);
 }
 
-fn process_cmd(bulb_id: u32, bulb: &Bulb, cmd: &String, state: &String) {
+fn process_cmd(bulb_id: u32, bulb: &Bulb, cmd: &String, args: &[String]) {
     match &cmd[..] {
         "pow" => {
-            operate_on_bulb(&bulb_id, bulb, "set_power", &format!("\"{}\"", state))
+            operate_on_bulb(&bulb_id, bulb, "set_power", &format!("\"{}\"", &args[0]))
         },
         "preset" => {
-            set_to_preset_color(bulb_id, bulb, state);
-        }
+            set_to_preset_color(bulb_id, bulb, &args[0]);
+        },
+        "col" => {
+            if args.len() < 3 {
+                return;
+            }
+            let cmd = String::from("set_rgb");
+            set_color(bulb_id, bulb, &cmd, &args[0], &args[1], &args[2]);
+        },
         _ => return
     }
 }
@@ -70,6 +78,20 @@ fn set_to_preset_color(bulb_id: u32, bulb: &Bulb, preset_name: &String) {
         _ => { return; }
     };
     operate_on_bulb(&bulb_id, bulb, "set_ct_abx", &params)
+}
+
+fn set_color(bulb_id: u32, bulb: &Bulb, cmd: &String, red: &String, green: &String, blue: &String) {
+    let (red, green, blue) 
+        = match (red.parse::<i32>(),
+                green.parse::<i32>(), 
+                blue.parse::<i32>()) {
+            (Ok(red), Ok(green), Ok(blue)) => (red, green, blue),
+            (Err(_), Err(_), Err(_)) => { return; }
+            _ => { return; }
+    };
+    let rgb_value = red * 65536 + green * 256 + blue;
+    
+    operate_on_bulb(&bulb_id, bulb, cmd, &format!("\"{}\", 1, 500", rgb_value));
 }
 
 fn find_bulbs(socket: UdpSocket) -> Receiver<Bulb> {
